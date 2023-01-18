@@ -2,10 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:nsd/nsd.dart';
 import 'package:provider/provider.dart';
+
+import 'package:http/http.dart' as http;
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
 
 const String serviceTypeDiscover = '_http._tcp';
 const String serviceTypeRegister = '_http._tcp';
@@ -34,6 +40,37 @@ class MyAppState extends State<MyApp> {
     enableLogging(LogTopic.calls);
   }
 
+  Future<void> sendTest() async {
+    for(Discovery discovery in discoveries) {
+      for(Service service in discovery.services) {
+        try {
+          var url = Uri.parse(service.host!);
+          var response = await http.get(url);
+          if (response.statusCode == 200) {
+            log("Sent test");
+          }
+        } catch (e) {
+          log(e.toString());
+        }
+      }
+    }
+  }
+
+  Future<void> awaitTest() async {
+    Response _echoRequest(Request request) =>
+        Response.ok('Request for "${request.url}"');
+
+    var handler =
+    const Pipeline().addMiddleware(logRequests()).addHandler(_echoRequest);
+
+    var server = await shelf_io.serve(handler, 'localhost', 8080);
+
+    // Enable content compression
+    server.autoCompress = true;
+
+    print('Serving at http://${server.address.host}:${server.port}');
+  }
+
   Future<void> addDiscovery() async {
     final discovery = await startDiscovery(serviceTypeDiscover);
     setState(() {
@@ -52,7 +89,7 @@ class MyAppState extends State<MyApp> {
 
   Future<void> addRegistration() async {
     final service = Service(
-        name: 'Some Service',
+        name: 'Emulator Service',
         type: serviceTypeRegister,
         port: nextPort,
         txt: createTxt());
@@ -93,6 +130,18 @@ class MyAppState extends State<MyApp> {
               child: const Icon(Icons.wifi_outlined),
               label: 'Start Discovery',
               onTap: () async => addDiscovery(),
+            ),
+            SpeedDialChild(
+              elevation: 2,
+              child: const Icon(Icons.mail),
+              label: 'Send test',
+              onTap: () async => sendTest(),
+            ),
+            SpeedDialChild(
+              elevation: 2,
+              child: const Icon(Icons.inbox),
+              label: 'Await test',
+              onTap: () async => awaitTest(),
             ),
           ],
         ),
