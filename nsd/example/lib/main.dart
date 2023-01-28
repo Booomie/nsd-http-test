@@ -6,12 +6,14 @@ import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:nsd/nsd.dart';
 import 'package:provider/provider.dart';
 
 import 'package:http/http.dart' as http;
-import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'service.dart';
 
 const String serviceTypeDiscover = '_http._tcp';
 const String serviceTypeRegister = '_http._tcp';
@@ -34,20 +36,26 @@ class MyAppState extends State<MyApp> {
 
   var _nextPort = 56360;
 
-  int get nextPort => _nextPort++; // TODO ensure ports are not taken
+  int get nextPort => _nextPort; //++; // TODO ensure ports are not taken
 
   MyAppState() {
     enableLogging(LogTopic.calls);
   }
 
+  //added by Jakob
   Future<void> sendTest() async {
-    for(Discovery discovery in discoveries) {
-      for(Service service in discovery.services) {
+    for (Discovery discovery in discoveries) {
+      for (Service service in discovery.services) {
         try {
-          var url = Uri.parse(service.host!);
+          //var url = Uri.parse('https://localhost:8080');
+          var url = Uri.parse('http://' +
+              service.host! +
+              ':' +
+              service.port!.toString() +
+              '/test');
           var response = await http.get(url);
           if (response.statusCode == 200) {
-            log("Sent test");
+            log(response.body);
           }
         } catch (e) {
           log(e.toString());
@@ -56,17 +64,12 @@ class MyAppState extends State<MyApp> {
     }
   }
 
+  //added by Jakob
   Future<void> awaitTest() async {
-    Response _echoRequest(Request request) =>
-        Response.ok('Request for "${request.url}"');
+    final service = MyService();
 
-    var handler =
-    const Pipeline().addMiddleware(logRequests()).addHandler(_echoRequest);
-
-    var server = await shelf_io.serve(handler, 'localhost', 8080);
-
-    // Enable content compression
-    server.autoCompress = true;
+    final server = await shelf_io.serve(
+        service.handler, (await NetworkInfo().getWifiIP())!, nextPort);
 
     print('Serving at http://${server.address.host}:${server.port}');
   }
@@ -89,7 +92,7 @@ class MyAppState extends State<MyApp> {
 
   Future<void> addRegistration() async {
     final service = Service(
-        name: 'Emulator Service',
+        name: 'Test Service',
         type: serviceTypeRegister,
         port: nextPort,
         txt: createTxt());
